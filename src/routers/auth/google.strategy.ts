@@ -23,9 +23,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     const user = await this.usersService.getUserByEmail(email);
     // Nếu không tồn tại user -> tạo mới
     if (!user) {
-      console.log('vào đây')
       const newUserResult = await this.usersService.createUser(email,name)
-      console.log(newUserResult)
       return newUserResult;
     }
 

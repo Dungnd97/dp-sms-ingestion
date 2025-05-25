@@ -1,21 +1,77 @@
-import { Controller, Get, Req, UseGuards, Query, Post, Body } from '@nestjs/common';
+import { Controller, Get, Req, UseGuards, Query, Post, Body, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
+import { responseObject } from '../../common/helpers/response.helper'
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiBody,
+} from '@nestjs/swagger';
 
+@ApiTags('SSO') // Nhóm API hiển thị trên Swagger UI
 @Controller('sso')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Get('google')
   @UseGuards(AuthGuard('google'))
+  @ApiOperation({ summary: 'Google login redirect' })
+  @ApiResponse({ status: 200, description: 'Redirect to Google login page' })
   async googleAuth() {
     // Passport sẽ tự redirect đến Google
   }
 
   @Get('google/redirect')
   @UseGuards(AuthGuard('google'))
-  googleAuthRedirect(@Req() req) {
-    const user = req.user;
-    return this.authService.generateTokens(user);
+  @ApiOperation({ summary: 'Google redirect callback' })
+  @ApiResponse({ status: 200, description: 'Return tokens after Google login' })
+  async googleAuthRedirect(@Req() req) {
+    try {
+      const user = req.user;
+      const tokens = await this.authService.generateTokens(user);
+      return responseObject(200, 'Success', tokens);
+    } catch (error) {
+      throw new UnauthorizedException(error.message);
+    }
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get('me')
+  @ApiBearerAuth() // Hiện nút authorize Bearer token trong Swagger UI
+  @ApiOperation({ summary: 'Get current authenticated user' })
+  @ApiResponse({ status: 200, description: 'Current user info' })
+  getMe(@Req() req) {
+    try {
+      return responseObject(200, 'Current user info', req.user);
+    } catch (error) {
+      throw new UnauthorizedException(error.message);
+    }
+  }
+
+  @Post('validate-token')
+  @ApiOperation({ summary: 'Validate JWT token and return user info' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        token: { type: 'string', example: 'Bearer eyJhbGciOi...' },
+      },
+      required: ['token'],
+    },
+  })
+
+  
+  @ApiResponse({ status: 200, description: 'Token valid, user info returned' })
+  @ApiResponse({ status: 401, description: 'Invalid or expired token' })
+  async validateToken(@Body('token') token: string) {
+    try {
+      const user = await this.authService.validateToken(token);
+      return responseObject(200, 'Validate Token success', user);
+
+    } catch (err) {
+      throw new UnauthorizedException(err.message);
+    }
   }
 }
