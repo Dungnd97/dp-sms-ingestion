@@ -1,8 +1,5 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common'
 import { Pool, PoolClient, QueryConfig, QueryResult } from 'pg'
-import * as dotenv from 'dotenv'
-
-dotenv.config()
 
 @Injectable()
 export class PostgresService implements OnModuleInit, OnModuleDestroy {
@@ -58,7 +55,7 @@ export class PostgresService implements OnModuleInit, OnModuleDestroy {
       try {
         const result = await client.query<T>(sql, params)
         this.logger.debug(`Executed SQL: ${sql}`)
-        return result
+        return result.rows
       } catch (error) {
         this.logger.error(`SQL Error: ${sql}`, error.stack)
         throw error

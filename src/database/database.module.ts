@@ -1,5 +1,5 @@
 import { Module, Global } from '@nestjs/common'
-import { PostgresService } from './postgress.service'
+import { PostgresService } from './postgres.service'
 
 @Global() // Đánh dấu Global để auto-import toàn cục
 @Module({
