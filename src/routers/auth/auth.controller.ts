@@ -10,7 +10,7 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 
-@ApiTags('SSO') // Nhóm API hiển thị trên Swagger UI
+@ApiTags('SSO')
 @Controller('sso')
 export class AuthController {
   constructor(private readonly authService: AuthService) { }
@@ -37,11 +37,11 @@ export class AuthController {
     }
   }
 
+  @ApiBearerAuth('jwt')
   @UseGuards(AuthGuard('jwt'))
-  @Get('me')
-  @ApiBearerAuth() // Hiện nút authorize Bearer token trong Swagger UI
   @ApiOperation({ summary: 'Get current authenticated user' })
   @ApiResponse({ status: 200, description: 'Current user info' })
+  @Get('me')
   getMe(@Req() req) {
     try {
       return responseObject(200, 'Current user info', req.user);
@@ -61,7 +61,6 @@ export class AuthController {
       required: ['token'],
     },
   })
-
   
   @ApiResponse({ status: 200, description: 'Token valid, user info returned' })
   @ApiResponse({ status: 401, description: 'Invalid or expired token' })

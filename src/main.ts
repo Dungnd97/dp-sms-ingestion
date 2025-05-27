@@ -9,15 +9,32 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule)
   
-  // Đăng ký global filter
   const { httpAdapter } = app.get(HttpAdapterHost);
   app.useGlobalFilters(new AllExceptionsFilter(httpAdapter));
 
   app.setGlobalPrefix('api/auth');
 
-  const config = new DocumentBuilder().setTitle('API Document').setDescription('API Document').setVersion('1.0').build()
+  const config = new DocumentBuilder()
+    .setTitle('API documentation')
+    .setDescription('API documentation')
+    .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'Authorization',
+        description: 'Enter JWT token',
+        in: 'header',
+      },
+      'jwt',
+    ).build();
   const document = SwaggerModule.createDocument(app, config)
-  SwaggerModule.setup('docs', app, document)
+  SwaggerModule.setup('docs', app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,
+    },
+  });
 
   const port = process.env.PORT ?? 3000
   await app.listen(port)

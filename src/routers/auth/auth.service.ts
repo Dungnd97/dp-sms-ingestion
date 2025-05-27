@@ -14,8 +14,7 @@ interface JwtPayload {
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AuthService.name); // Sửa lại tên logger
-
+  private readonly logger = new Logger(AuthService.name);
   constructor(
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
@@ -33,14 +32,14 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(payload, {
       secret: process.env.JWT_SECRET,
-      expiresIn: process.env.JWT_EXPIRES_IN || '1h', // Giá trị mặc định
+      expiresIn: process.env.JWT_EXPIRES_IN || '1h',
     });
 
     const refreshToken = this.jwtService.sign(
       { sub: user.id },
       {
         secret: process.env.REFRESH_TOKEN_SECRET,
-        expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d', // Giá trị mặc định
+        expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
       },
     );
 
@@ -55,7 +54,6 @@ export class AuthService {
 
   async validateToken(token: string): Promise<{ id: string; username?: string; role?: string }> {
     try {
-      // Bỏ prefix 'Bearer ' nếu có
       token = token.replace(/^Bearer\s+/i, '');
 
       if (!process.env.JWT_SECRET) {
@@ -74,7 +72,6 @@ export class AuthService {
 
       return user;
     } catch (error) {
-      // Chỉ log message của error mà không log cả stack trace
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Token validation failed: ${errorMessage}`);
       
