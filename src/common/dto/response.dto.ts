@@ -26,7 +26,7 @@ export class ResponseDto<T> {
   status: number;
 
   @Expose()
-  message: string;
+  message: string | null = "Success";
 
   @Expose()
   data?: T | null = null;

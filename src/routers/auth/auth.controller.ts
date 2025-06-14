@@ -1,7 +1,9 @@
-import { Controller, Get, Req, UseGuards, Query, Post, Body, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, Req, UseGuards, Query, Post, Body, UnauthorizedException, HttpStatus, Res, HttpCode } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
+import { MailService } from '../../mail/mail.service';
 import { responseObject } from '../../common/helpers/response.helper'
+import { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -13,12 +15,12 @@ import {
 @ApiTags('SSO')
 @Controller('sso')
 export class AuthController {
-  constructor(private readonly authService: AuthService) { }
+  constructor(private readonly authService: AuthService, private readonly mailService: MailService) { }
 
   @Get('google')
   @UseGuards(AuthGuard('google'))
   @ApiOperation({ summary: 'Google login redirect' })
-  @ApiResponse({ status: 200, description: 'Redirect to Google login page' })
+  @ApiResponse({ status: 1, description: 'Redirect to Google login page' })
   async googleAuth() {
     // Passport sẽ tự redirect đến Google
   }
@@ -31,7 +33,7 @@ export class AuthController {
     try {
       const user = req.user;
       const tokens = await this.authService.generateTokens(user);
-      return responseObject(200, 'Success', tokens);
+      return responseObject(1, 'Success', tokens);
     } catch (error) {
       throw new UnauthorizedException(error.message);
     }
@@ -44,13 +46,14 @@ export class AuthController {
   @Get('me')
   getMe(@Req() req) {
     try {
-      return responseObject(200, 'Current user info', req.user);
+      return responseObject(1, 'Current user info', req.user);
     } catch (error) {
       throw new UnauthorizedException(error.message);
     }
   }
 
   @Post('validate-token')
+  @HttpCode(200)
   @ApiOperation({ summary: 'Validate JWT token and return user info' })
   @ApiBody({
     schema: {
@@ -67,10 +70,41 @@ export class AuthController {
   async validateToken(@Body('token') token: string) {
     try {
       const user = await this.authService.validateToken(token);
-      return responseObject(200, 'Validate Token success', user);
+      return responseObject(1, 'Validate Token success', user);
 
     } catch (err) {
       throw new UnauthorizedException(err.message);
+    }
+  }
+
+  @Post('send')
+  async sendEmail(
+    @Body()
+    body: {
+      to: string;
+      subject: string;
+      content: string;
+      isHtml?: boolean;
+    },
+    @Res() res: Response,
+  ) {
+    try {
+      await this.mailService.sendMail({
+        to: body.to,
+        subject: body.subject,
+        [body.isHtml ? 'html' : 'text']: body.content,
+      });
+
+      return res.status(HttpStatus.OK).json({
+        success: true,
+        message: 'Email sent successfully',
+      });
+    } catch (error) {
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: 'Failed to send email',
+        error: error.message,
+      });
     }
   }
 }

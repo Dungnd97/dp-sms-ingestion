@@ -7,15 +7,14 @@ import { PassportModule } from '@nestjs/passport';
 import { GoogleStrategy } from './google.strategy';
 import { JwtStrategy } from './jwt.strategy';
 import { UsersModule } from '../users/users.module';
+import { MailModule } from '../../mail/mail.module';
 
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
-    JwtModule.register({
-      secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '60s' },
-    }),
-    UsersModule
+    JwtModule.register({}),
+    UsersModule,
+    MailModule
   ],
   providers: [AuthService, GoogleStrategy, JwtStrategy],
   controllers: [AuthController],
