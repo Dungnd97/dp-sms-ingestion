@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Post, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Query, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { responseObject } from '../../common/helpers/response.helper'
 import { ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -30,4 +30,9 @@ export class UsersController {
       throw new UnauthorizedException(error.message);
     }
   }
+
+  @Get('verify-email')
+  async verifyEmail(@Query('token') token: string) {
+  return this.usersService.verifyEmailToken(token);
+}
 }
