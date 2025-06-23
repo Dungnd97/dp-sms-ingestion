@@ -15,40 +15,36 @@ interface JwtPayload {
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
   ) { }
 
   async generateTokens(user: { id: string; email: string }): Promise<GetTokenDTO> {
-    if (!process.env.JWT_SECRET || !process.env.REFRESH_TOKEN_SECRET) {
-      throw new Error('JWT secrets are not configured');
+    const { JWT_SECRET, REFRESH_TOKEN_SECRET, JWT_EXPIRES_IN, REFRESH_TOKEN_EXPIRES_IN } = process.env;
+
+    if (!JWT_SECRET || !REFRESH_TOKEN_SECRET) {
+      this.logger.error('JWT secrets không được cấu hình');
+      throw new UnauthorizedException('Token lỗi cấu hình');
     }
 
-    const payload = {
-      sub: user.id,
-      email: user.email
-    };
-
-    const accessToken = this.jwtService.sign(payload, {
-      secret: process.env.JWT_SECRET,
-      expiresIn: process.env.JWT_EXPIRES_IN || '1h',
-    });
+    const accessToken = this.jwtService.sign(
+      { sub: user.id, email: user.email },
+      { secret: JWT_SECRET, expiresIn: JWT_EXPIRES_IN || '1h' },
+    );
 
     const refreshToken = this.jwtService.sign(
       { sub: user.id },
-      {
-        secret: process.env.REFRESH_TOKEN_SECRET,
-        expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
-      },
+      { secret: REFRESH_TOKEN_SECRET, expiresIn: REFRESH_TOKEN_EXPIRES_IN || '7d' },
     );
 
     try {
       await this.usersService.updateRefreshToken(user.email, refreshToken);
       return { accessToken, refreshToken };
     } catch (error) {
-      this.logger.error(`Failed to update refresh token for user ${user.email}`, error.stack);
-      throw new UnauthorizedException('Failed to generate tokens');
+      this.logger.error(`Không cập nhật được refresh token cho user có email: ${user.email}`, error.stack);
+      throw new UnauthorizedException('Không tạo được refresh tokens');
     }
   }
 
@@ -57,30 +53,31 @@ export class AuthService {
       token = token.replace(/^Bearer\s+/i, '');
 
       if (!process.env.JWT_SECRET) {
-        this.logger.error('JWT_SECRET is not configured');
-        throw new UnauthorizedException('Authentication failed');
+        this.logger.error(`Token secret không được cấu hình}`);
+        throw new UnauthorizedException('Token không hợp lệ');
       }
 
       const payload = jwt.verify(token, process.env.JWT_SECRET) as JwtPayload;
 
       if (!payload.sub) {
-        this.logger.error('Invalid token payload: missing sub field');
-        throw new UnauthorizedException('Invalid token');
+        this.logger.error('Token thiếu sub');
+        throw new UnauthorizedException('Token không hợp lệ');
       }
 
+      console.log(payload)
       const user = await this.usersService.getUserById(payload.sub);
 
       return user;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Token validation failed: ${errorMessage}`);
-      
+      const errorMessage = error instanceof Error ? error.message : 'Lỗi không xác định';
+      this.logger.error(`Xác thực Token không thành công: ${errorMessage}`);
+
       if (error instanceof jwt.TokenExpiredError) {
-        throw new UnauthorizedException('Token has expired');
+        throw new UnauthorizedException('Token không hợp lệ');
       } else if (error instanceof jwt.JsonWebTokenError) {
-        throw new UnauthorizedException('Invalid token');
+        throw new UnauthorizedException('Token không hợp lệ');
       }
-      throw new UnauthorizedException('Authentication failed');
+      throw new UnauthorizedException('Xác thực không thành công');
     }
   }
 }

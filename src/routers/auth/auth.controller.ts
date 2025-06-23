@@ -2,14 +2,14 @@ import { Controller, Get, Req, UseGuards, Post, Body, UnauthorizedException, Htt
 import { AuthGuard } from '@nestjs/passport'
 import { AuthService } from './auth.service'
 import { responseObject } from '../../common/helpers/response.helper'
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger'
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger'
 
-@ApiTags('SSO')
-@Controller('sso')
+@ApiTags('Auth')
+@Controller('')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
-  @Get('google')
+  @Get('sso/google')
   @UseGuards(AuthGuard('google'))
   @ApiOperation({ summary: 'Google login redirect' })
   @ApiResponse({ status: 1, description: 'Redirect to Google login page' })
@@ -17,31 +17,15 @@ export class AuthController {
     // Passport sẽ tự redirect đến Google
   }
 
-  @Get('google/redirect')
+  @Get('sso/google/redirect')
   @UseGuards(AuthGuard('google'))
   @ApiOperation({ summary: 'Google redirect callback' })
   @ApiResponse({ status: 200, description: 'Return tokens after Google login' })
   async googleAuthRedirect(@Req() req) {
-    try {
-      const user = req.user
-      const tokens = await this.authService.generateTokens(user)
-      return responseObject(1, 'Success', '123', tokens)
-    } catch (error) {
-      throw new UnauthorizedException(error.message)
-    }
-  }
-
-  @ApiBearerAuth('jwt')
-  @UseGuards(AuthGuard('jwt'))
-  @ApiOperation({ summary: 'Get current authenticated user' })
-  @ApiResponse({ status: 200, description: 'Current user info' })
-  @Get('me')
-  getMe(@Req() req) {
-    try {
-      return responseObject(1, 'Current user info', '123', req.user)
-    } catch (error) {
-      throw new UnauthorizedException(error.message)
-    }
+    const user = req.user
+    console.log(user)
+    const tokens = await this.authService.generateTokens(user)
+    return responseObject(1, 'Success', null, tokens)
   }
 
   @Post('validate-token')
@@ -61,7 +45,7 @@ export class AuthController {
   async validateToken(@Body('token') token: string) {
     try {
       const user = await this.authService.validateToken(token)
-      return responseObject(1, 'Validate Token success', '123', user)
+      return responseObject(1, 'Validate Token success', null, user)
     } catch (err) {
       throw new UnauthorizedException(err.message)
     }

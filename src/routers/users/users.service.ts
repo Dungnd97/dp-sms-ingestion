@@ -1,6 +1,4 @@
-// user.service.ts
 import {
-  ConflictException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -14,6 +12,7 @@ import { UserStatus } from '../../common/enums/user-status.enum'
 import * as jwt from 'jsonwebtoken'
 import { JwtService } from '@nestjs/jwt'
 import { parseExpireTime } from '../../utils/parseExpireTime'
+import { responseObject } from '../../common/helpers/response.helper'
 
 @Injectable()
 export class UsersService {
@@ -32,7 +31,7 @@ export class UsersService {
   })
   // A. Các service nghiệp vụ
   //I. Thêm mới User trong TH SSO với tài khoản GG và Email chưa tồn tại trong DB
-  async createUserLoginGoogleAccount(email: string, name: string): Promise<{ email: string; name: string }> {
+  async createUserLoginGoogleAccount(email: string, name: string): Promise<{ id:string, email: string; name: string }> {
     // 1. Kiểm tra email tồn tại
     const getUserByEmail = await this.getUserByEmail(email)
     // 1.1 TH tồn tại user
@@ -55,7 +54,7 @@ export class UsersService {
           this.logger.log(
             `Cập nhật trạng thái New -> Active thành công, trường hợp tồn tại user trạng thái New khi đăng nhập bằng SSO GG ${email}`,
           )
-          return { email, name }
+          return { id, email, name }
         } catch (error) {
           this.logger.error(
             `Cập nhật trạng thái New -> Active không thành công, trường hợp tồn tại user trạng thái New khi đăng nhập bằng SSO GG ${email}`,
@@ -72,21 +71,22 @@ export class UsersService {
         )
       }
 
-      return { email, name }
+      return { id, email, name }
     }
 
     // 1.2 TH không tồn tại user
     const newUserId = uuidv4()
 
     try {
-      const [result] = await this.postgresService.execute<{ email: string; name: string }>(
+      const [result] = await this.postgresService.execute<{ id:string, email: string; name: string }>(
         `
         INSERT INTO sys_user (id, email, name, status, created_at, updated_at)
         VALUES ($1, $2, $3, $4, NOW(), NOW())
-        RETURNING email,name
+        RETURNING id, email, name
         `,
         [newUserId, email, name, UserStatus.Active],
       )
+      console.log(result)
       this.logger.log(`Thêm mới user thành công với email: ${email}`)
       return result
     } catch (error) {
@@ -119,7 +119,7 @@ export class UsersService {
   //III. Lấy thông tin user bằng email
   async getUserByEmail(email: string) {
     try {
-      const result = await this.postgresService.execute<{ id: string }>(
+      const result = await this.postgresService.execute<{ email: string }>(
         'SELECT id, name, status, updated_at FROM sys_user WHERE email = $1',
         [email],
       )
@@ -163,7 +163,8 @@ export class UsersService {
     email: string,
     password: string,
     confirmPassword: string,
-  ): Promise<{ status: number; message: string; screen?: string }> {
+  ): Promise<{ status: number; message: string; actionScreen?: string }> {
+
     //1. Kiểm tra mật khẩu trùng khớp
     if (password !== confirmPassword) {
       return this.returnMessage(0, 'Mật khẩu không khớp')
@@ -310,7 +311,7 @@ export class UsersService {
           status: 0,
           message: 'Thời gian xác thực đã hết hạn. Vui lòng thực hiện đăng ký lại.',
         }
-      }
+      }      
       this.logger.error(`Có lỗi xảy ra trong quá trình xác thực email`, error.stack)
       throw new UnauthorizedException('Có lỗi xảy ra trong quá trình xác thực email')
     }

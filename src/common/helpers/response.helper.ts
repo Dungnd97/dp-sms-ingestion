@@ -2,14 +2,16 @@ import { ResponseDto, PaginationMetaDto } from '../dto/response.dto'
 
 export const responseObject = <T>(
   statusCode: number,
-  message: string,
-  actionScreen?: string,
+  message?: string | null,
+  actionScreen?: string | null,
   data?: T,
   meta?: PaginationMetaDto,
   timestamp?: string,
 ): ResponseDto<T> => {
   const finalTimestamp = timestamp || getFormattedTimestamp()
-  return new ResponseDto(statusCode, message, actionScreen, data, meta, finalTimestamp)
+  const finalMessage = message ?? 'Thành công'
+  const finalActionScreen = actionScreen ?? undefined
+  return new ResponseDto(statusCode, finalMessage, finalActionScreen, data, meta, finalTimestamp)
 }
 
 function getFormattedTimestamp(): string {

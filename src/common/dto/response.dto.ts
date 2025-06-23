@@ -26,10 +26,10 @@ export class ResponseDto<T> {
   status: number
 
   @Expose()
-  message: string | null = 'Thành công'
+  message?: string | null = null
 
   @Expose()
-  actionScreen?: string | null = 'NO_ACTION'
+  actionScreen?: string | null = null
 
   @Expose()
   data?: T | null = null
@@ -43,7 +43,7 @@ export class ResponseDto<T> {
 
   constructor(
     status: number,
-    message: string,
+    message: string | null = null,
     actionScreen: string | null = null,
     data: T | null = null,
     meta: PaginationMetaDto | null = null,

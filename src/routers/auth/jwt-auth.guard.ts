@@ -6,16 +6,16 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
     if (err) {
       if (err.name === 'TokenExpiredError') {
-        throw new UnauthorizedException('Token has expired');
+        throw new UnauthorizedException('Token không hợp lệ');
       }
       throw err;
     }
 
     if (!user) {
       if (info && info.name === 'JsonWebTokenError') {
-        throw new UnauthorizedException('Invalid token');
+        throw new UnauthorizedException('Token không hợp lệ');
       }
-      throw new UnauthorizedException('User authentication failed');
+      throw new UnauthorizedException('Xác thực người dùng không thành công');
     }
     
     return user;

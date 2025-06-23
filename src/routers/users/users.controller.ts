@@ -1,11 +1,23 @@
-import { Body, Controller, Get, HttpCode, Post, Query, UnauthorizedException } from '@nestjs/common'
+import { Body, Controller, Get, HttpCode, Post, Query, Req, UnauthorizedException, UseGuards } from '@nestjs/common'
 import { UsersService } from './users.service'
 import { responseObject } from '../../common/helpers/response.helper'
-import { ApiBody, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger'
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { RegisterUserDto } from './dto/register-user.dto'
+import { AuthGuard } from '@nestjs/passport'
 
+@ApiTags('User')
 @Controller('user')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
+
+  @ApiBearerAuth('jwt')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Lấy dữ liệu thông tin người dùng sau khi đăng nhập thành công' })
+  @ApiResponse({ status: 200, description: 'Thông tin người dùng hiện tại' })
+  @Get('getUserInfo')
+  getUserInfo(@Req() req) {
+    return responseObject(1, null, null, req.user)
+  }
 
   @Post('register')
   @HttpCode(200)
@@ -22,13 +34,9 @@ export class UsersController {
       required: ['email', 'password', 'confirmPassword'],
     },
   })
-  async register(@Body() body: { email: string; password: string; confirmPassword: string }) {
-    try {
-      const result = await this.usersService.registerUser(body.email, body.password, body.confirmPassword)
-      return responseObject(result.status, result.message, result.screen)
-    } catch (error) {
-      throw new UnauthorizedException(error.message)
-    }
+  async register(@Body() dto: RegisterUserDto) {
+    const result = await this.usersService.registerUser(dto.email, dto.password, dto.confirmPassword)
+    return responseObject(result.status, result.message, result.actionScreen)
   }
 
   @Get('verify-email')
