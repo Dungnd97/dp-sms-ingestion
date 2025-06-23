@@ -1,44 +1,59 @@
-import { Expose, Type } from 'class-transformer';
+import { Expose, Type } from 'class-transformer'
 
 export class PaginationMetaDto {
   @Expose()
-  page: number;
+  page: number
 
   @Expose()
-  limit: number;
+  limit: number
 
   @Expose()
-  totalItems: number;
+  totalItems: number
 
   @Expose()
-  totalPages: number;
+  totalPages: number
 
   constructor(page: number, limit: number, totalItems: number) {
-    this.page = page;
-    this.limit = limit;
-    this.totalItems = totalItems;
-    this.totalPages = Math.ceil(totalItems / limit);
+    this.page = page
+    this.limit = limit
+    this.totalItems = totalItems
+    this.totalPages = Math.ceil(totalItems / limit)
   }
 }
 
 export class ResponseDto<T> {
   @Expose()
-  status: number;
+  status: number
 
   @Expose()
-  message: string | null = "Success";
+  message: string | null = 'Thành công'
 
   @Expose()
-  data?: T | null = null;
+  actionScreen?: string | null = 'NO_ACTION'
+
+  @Expose()
+  data?: T | null = null
 
   @Expose()
   @Type(() => PaginationMetaDto)
-  meta: PaginationMetaDto | null = null // Mặc định là null
+  meta: PaginationMetaDto | null = null
 
-  constructor(status: number, message: string, data: T | null = null, meta: PaginationMetaDto | null = null) {
-    this.status = status;
-    this.message = message;
-    this.data = data;
-    this.meta = meta;
+  @Expose()
+  timestamp?: string | null
+
+  constructor(
+    status: number,
+    message: string,
+    actionScreen: string | null = null,
+    data: T | null = null,
+    meta: PaginationMetaDto | null = null,
+    timestamp: string | null = null,
+  ) {
+    this.status = status
+    this.message = message
+    this.actionScreen = actionScreen
+    this.data = data
+    this.meta = meta
+    this.timestamp = timestamp
   }
 }

@@ -1,10 +1,30 @@
-import { ResponseDto, PaginationMetaDto } from '../dto/response.dto';
+import { ResponseDto, PaginationMetaDto } from '../dto/response.dto'
 
 export const responseObject = <T>(
   statusCode: number,
   message: string,
+  actionScreen?: string,
   data?: T,
-  meta?: PaginationMetaDto
+  meta?: PaginationMetaDto,
+  timestamp?: string,
 ): ResponseDto<T> => {
-  return new ResponseDto(statusCode, message, data, meta);
-};
+  const finalTimestamp = timestamp || getFormattedTimestamp()
+  return new ResponseDto(statusCode, message, actionScreen, data, meta, finalTimestamp)
+}
+
+function getFormattedTimestamp(): string {
+  const date = new Date()
+  const vnDate = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }))
+
+  const pad = (n: number) => n.toString().padStart(2, '0')
+
+  const day = pad(vnDate.getDate())
+  const month = pad(vnDate.getMonth() + 1) // 0-based
+  const year = vnDate.getFullYear()
+
+  const hours = pad(vnDate.getHours())
+  const minutes = pad(vnDate.getMinutes())
+  const seconds = pad(vnDate.getSeconds())
+
+  return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`
+}
