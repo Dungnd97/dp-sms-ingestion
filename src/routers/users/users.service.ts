@@ -17,7 +17,7 @@ export class UsersService {
     private readonly postgresService: PostgresService,
     private readonly mailService: MailService,
     private readonly jwtService: JwtService,
-  ) {}
+  ) { }
 
   private returnMessage = (status: number, message: string, actionScreen?: string) => ({
     status,
@@ -193,7 +193,7 @@ export class UsersService {
         }
         // 2.2.2 TH email hết thời hạn xác thực -> gửi lại email
         const resulTokenEmail = this.generateTokenEmail(user.id, user.email)
-        const verificationUrl = `${process.env.APP_URL}/auth/user/verify-email?token=${resulTokenEmail.tokenEmail}`
+        const verificationUrl = `${process.env.APP_URL_VERIFY_EMAIL_LOGIN}?token=${resulTokenEmail.tokenEmail}`
         try {
           await this.sendVerificationEmail(email, verificationUrl)
           await this.postgresService.executeInTransaction([
@@ -222,7 +222,7 @@ export class UsersService {
     const hashedPassword = await hashPassword(password)
     const newUserId = uuidv4()
     const tokenInfo = this.generateTokenEmail(newUserId, email)
-    const verificationUrl = `${process.env.APP_URL}/auth/user/verify-email?token=${tokenInfo.tokenEmail}`
+    const verificationUrl = `${process.env.APP_URL_VERIFY_EMAIL_LOGIN}?token=${tokenInfo.tokenEmail}`
 
     try {
       await this.sendVerificationEmail(email, verificationUrl)
@@ -293,21 +293,14 @@ export class UsersService {
         ])
 
         this.logger.log('Cập nhật trạng thái New -> Active thành công, trường hợp xác thực email')
-        return {
-          status: 1,
-          message:
-            'Tài khoản của bạn đã được kích hoạt thành công. Vui lòng thực hiện đăng nhập dựa trên các thông tin mà bạn đã đăng ký.',
-        }
+        return this.returnMessage(1, 'Tài khoản của bạn đã được kích hoạt thành công. Vui lòng thực hiện đăng nhập dựa trên các thông tin mà bạn đã đăng ký.', 'USER_LOGIN')
       } catch (error) {
         this.logger.error('Cập nhật trạng thái New -> Active không thành công, trường hợp xác thực email', error.stack)
         throw error
       }
     } catch (error) {
       if (error.name === 'TokenExpiredError') {
-        return {
-          status: 0,
-          message: 'Thời gian xác thực đã hết hạn. Vui lòng thực hiện đăng ký lại.',
-        }
+        return this.returnMessage(0, 'Thời gian xác thực đã hết hạn. Vui lòng thực hiện đăng ký lại')
       }
       this.logger.error(`Có lỗi xảy ra trong quá trình xác thực email`, error.stack)
       throw new UnauthorizedException('Có lỗi xảy ra trong quá trình xác thực email')
@@ -373,6 +366,152 @@ export class UsersService {
     }
   }
 
+  //X.Gửi Email để đổi mật khẩu
+  async sendResetPasswordEmail(email: string): Promise<{ status: number; message: string; actionScreen?: string }> {
+    const user = await this.getUserByEmail(email);
+
+    const defaultMessage =
+      'Nếu email tồn tại, một liên kết đặt lại mật khẩu đã được gửi. Vui lòng kiểm tra Hộp thư thoại hoặc Thư rác trong địa chỉ email bạn vừa nhập.'
+
+    if (!user) {
+      return this.returnMessage(1, defaultMessage)
+    }
+
+    const updatedAt = new Date(user.updated_at as string).getTime()
+    const now = Date.now();
+    const expireMs = parseExpireTime(process.env.JWT_EXPIRES_IN_RESET_PASSWORD || '15m')
+
+    if (now < updatedAt + expireMs) {
+      // Trong khoảng 15 phút thì không gửi lại email
+      return this.returnMessage(1, defaultMessage)
+    }
+
+    const payload = {
+      sub: user.id,
+      email: user.email,
+    }
+
+    const tokenEmail = this.jwtService.sign(payload, {
+      secret: process.env.JWT_SECRET_RESET_PASSWORD,
+      expiresIn: process.env.JWT_EXPIRES_IN_RESET_PASSWORD || '15m',
+    })
+
+    const resetUrl = `${process.env.APP_URL_FORGOT_PASSWORD}?token=${tokenEmail}`;
+
+    const htmlContent = `
+      <p>Xin chào ${user.name || ''},</p>
+      <p>Bạn vừa yêu cầu đặt lại mật khẩu. Vui lòng nhấn vào liên kết dưới đây để tiếp tục:</p>
+      <a href="${resetUrl}">Đặt lại mật khẩu</a>
+      <p>Liên kết sẽ hết hạn sau 15 phút.</p>
+      <p>Nếu bạn không yêu cầu, hãy bỏ qua email này.</p>
+    `;
+
+    await this.mailService.sendMail({
+      to: email,
+      subject: 'Yêu cầu đặt lại mật khẩu',
+      html: htmlContent,
+    });
+
+    await this.postgresService.executeInTransaction([
+      {
+        sql: `
+        UPDATE sys_user
+        SET updated_at = NOW()
+        WHERE id = $1
+      `,
+        params: [user.id],
+      },
+    ])
+    return this.returnMessage(1, defaultMessage)
+  }
+
+  //XI.Kiểm tra Token đổi mật khẩu
+  async validateResetPasswordEmailToken(token: string): Promise<{ status: number; message: string; actionScreen?: string }> {
+    try {
+      const secret = process.env.JWT_SECRET_RESET_PASSWORD
+      if (!secret) {
+        throw new UnauthorizedException('Cấu hình token reset mật khẩu không tồn tại')
+      }
+
+      const payload = jwt.verify(token, secret) as { sub: string; email: string }
+
+      if (!payload.sub) {
+        return this.returnMessage(0, 'Token không hợp lệ hoặc đã hết hạn')
+      }
+
+      const user = await this.getUserById(payload.sub)
+
+      if (!user) {
+        return this.returnMessage(0, 'Tài khoản không tồn tại. Vui lòng đăng ký lại.', 'USER_REGISTER')
+      }
+
+      if (user.status !== UserStatus.Active) {
+        return this.returnMessage(0, 'Tài khoản chưa được kích hoạt. Vui lòng kiểm tra Hộp thư thoại hoặc Thư rác trong địa chỉ email. Nếu quá 24h kể từ lúc đăng ký bạn không nhận được email xác thực, vui lòng thực hiện lại đăng ký.', 'USER_LOGIN')
+      }
+
+      return this.returnMessage(1, 'Xác thực hợp lệ. Bạn có thể đổi mật khẩu.')
+    } catch (error) {
+      if (error.name === 'TokenExpiredError') {
+        return this.returnMessage(0, 'Xác thực không hợp lệ. Vui lòng gửi lại yêu cầu.')
+      }
+
+      return this.returnMessage(0, 'Xác thực không hợp lệ.')
+    }
+  }
+
+  //XII. Cấp lại mật khẩu
+  async resetPassword(
+  token: string,
+  newPassword: string,
+  confirmPassword: string,
+): Promise<{ status: number; message: string; actionScreen?: string }> {
+  if (newPassword !== confirmPassword) {
+    return this.returnMessage(0, 'Mật khẩu và xác nhận mật khẩu không khớp');
+  }
+
+  try {
+    if (!process.env.JWT_SECRET_RESET_PASSWORD) {
+      return this.returnMessage(0, 'Thiếu cấu hình bảo mật reset password');
+    }
+
+    let payload: { sub: string; email: string };
+
+    try {
+      payload = this.jwtService.verify(token, {
+        secret: process.env.JWT_SECRET_RESET_PASSWORD,
+      });
+    } catch (err) {
+      if (err.name === 'TokenExpiredError') {
+        return this.returnMessage(0, 'Liên kết đặt lại mật khẩu đã hết hạn. Vui lòng gửi lại yêu cầu.');
+      } else if (err.name === 'JsonWebTokenError') {
+        return this.returnMessage(0, 'Token không hợp lệ. Vui lòng kiểm tra lại liên kết.');
+      }
+      return this.returnMessage(0, 'Lỗi xác thực token.');
+    }
+
+    if (!payload?.sub) {
+      return this.returnMessage(0, 'Token không hợp lệ.');
+    }
+
+    const user = await this.getUserById(payload.sub);
+    if (!user) {
+      return this.returnMessage(0, 'Tài khoản không tồn tại');
+    }
+
+    const hashedPassword = await hashPassword(newPassword);
+    await this.updatePasswordById(user.id, hashedPassword);
+
+    return this.returnMessage(
+      1,
+      'Mật khẩu đã được thay đổi thành công. Vui lòng đăng nhập lại với mật khẩu mới.',
+      'USER_LOGIN',
+    );
+  } catch (error) {
+    this.logger.error(error.stack);
+    return this.returnMessage(0, 'Có lỗi xảy ra khi đặt lại mật khẩu');
+  }
+}
+
   // B. Các service dùng nội bộ
   // I. Hàm sinh token
   generateTokenEmail(id: string, email: string): { tokenEmail: string } {
@@ -410,5 +549,24 @@ export class UsersService {
       <p>Liên kết sẽ hết hạn sau 24 giờ.</p>
     `,
     })
+  }
+
+  //III. Cập nhật mật khẩu theo id
+  async updatePasswordById(userId: string, hashedPassword: string): Promise<void> {
+    try {
+      await this.postgresService.executeInTransaction([
+        {
+          sql: `
+          UPDATE sys_user
+          SET password = $1, updated_at = NOW()
+          WHERE id = $2
+        `,
+          params: [hashedPassword, userId],
+        },
+      ]);
+    } catch (error) {
+      this.logger.error(`Lỗi khi cập nhật mật khẩu cho user ${userId}`, error.stack);
+      throw new InternalServerErrorException('Không thể cập nhật mật khẩu');
+    }
   }
 }

@@ -8,13 +8,13 @@ export class LoginDto {
   @IsNotEmpty()
   email: string
 
-  @ApiPropertyOptional({ example: '123456aBA' })
+  @ApiPropertyOptional({ example: '123456aB@' })
   @IsString()
   @MinLength(8)
   @MaxLength(32)
   @IsNotEmpty()
   @Matches(/(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).*/, {
-    message: 'Password must contain at least 1 uppercase, 1 lowercase and 1 number',
+    message: 'Mật khẩu phải chứa ít nhất 1 chữ hoa, 1 chữ thường và 1 số',
   })
   password: string
 }
