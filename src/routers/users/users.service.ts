@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  InternalServerErrorException,
-  Logger,
-  UnauthorizedException,
-} from '@nestjs/common'
+import { Injectable, InternalServerErrorException, Logger, UnauthorizedException } from '@nestjs/common'
 import { PostgresService } from '../../database/postgres.service'
 import { MailService } from '../../mail/mail.service'
 import { hashPassword } from '../../utils/hashPassword'
@@ -12,7 +7,7 @@ import { UserStatus } from '../../common/enums/user-status.enum'
 import * as jwt from 'jsonwebtoken'
 import { JwtService } from '@nestjs/jwt'
 import { parseExpireTime } from '../../utils/parseExpireTime'
-import { responseObject } from '../../common/helpers/response.helper'
+import * as bcrypt from 'bcrypt'
 
 @Injectable()
 export class UsersService {
@@ -31,7 +26,10 @@ export class UsersService {
   })
   // A. Các service nghiệp vụ
   //I. Thêm mới User trong TH SSO với tài khoản GG và Email chưa tồn tại trong DB
-  async createUserLoginGoogleAccount(email: string, name: string): Promise<{ id:string, email: string; name: string }> {
+  async createUserLoginGoogleAccount(
+    email: string,
+    name: string,
+  ): Promise<{ id: string; email: string; name: string }> {
     // 1. Kiểm tra email tồn tại
     const getUserByEmail = await this.getUserByEmail(email)
     // 1.1 TH tồn tại user
@@ -78,7 +76,7 @@ export class UsersService {
     const newUserId = uuidv4()
 
     try {
-      const [result] = await this.postgresService.execute<{ id:string, email: string; name: string }>(
+      const [result] = await this.postgresService.execute<{ id: string; email: string; name: string }>(
         `
         INSERT INTO sys_user (id, email, name, status, created_at, updated_at)
         VALUES ($1, $2, $3, $4, NOW(), NOW())
@@ -96,22 +94,22 @@ export class UsersService {
   }
 
   //II. Thêm mới refreshToken cho 1 user
-  async updateRefreshToken(email: string, refreshToken: string): Promise<boolean> {
+  async updateRefreshToken(id: string, refreshToken: string): Promise<boolean> {
     const sql = `
     UPDATE sys_user 
     SET refresh_token = $1, updated_at = NOW()
-    WHERE email = $2
+    WHERE id = $2
   `
 
-    const params = [refreshToken, email]
+    const params = [refreshToken, id]
 
     try {
       await this.postgresService.executeInTransaction([{ sql, params }])
 
-      this.logger.log(`Updated refreshToken for user ${email}`)
+      this.logger.log(`Cập nhật refreshToken thành công cho user có id: ${id}`)
       return true
     } catch (error) {
-      this.logger.error(`Failed to update refreshToken for user ${email}`, error.stack)
+      this.logger.error(`Cập nhật refreshToken KHÔNG thành công cho user có id: ${id}`, error.stack)
       throw error
     }
   }
@@ -164,7 +162,6 @@ export class UsersService {
     password: string,
     confirmPassword: string,
   ): Promise<{ status: number; message: string; actionScreen?: string }> {
-
     //1. Kiểm tra mật khẩu trùng khớp
     if (password !== confirmPassword) {
       return this.returnMessage(0, 'Mật khẩu không khớp')
@@ -251,7 +248,7 @@ export class UsersService {
   }
 
   //VII. Xác thực link email đăng ký
-  async verifyEmailToken(token: string): Promise<{ status: number; message: string }> {
+  async verifyEmailToken(token: string): Promise<{ status: number; message: string; actionScreen?: string }> {
     try {
       // 1. Giải mã và xác minh token
       if (!process.env.JWT_SECRET_EMAIL) {
@@ -311,9 +308,68 @@ export class UsersService {
           status: 0,
           message: 'Thời gian xác thực đã hết hạn. Vui lòng thực hiện đăng ký lại.',
         }
-      }      
+      }
       this.logger.error(`Có lỗi xảy ra trong quá trình xác thực email`, error.stack)
       throw new UnauthorizedException('Có lỗi xảy ra trong quá trình xác thực email')
+    }
+  }
+
+  //VIII. Check thông tin khi login
+  async checkInfoLogin(email: string, password: string) {
+    try {
+      const [user] = await this.postgresService.execute<{ email: string }>(
+        'SELECT id, password, status, updated_at FROM sys_user WHERE email = $1',
+        [email],
+      )
+
+      if (!user) {
+        throw new UnauthorizedException('Thông tin tài khoản hoặc mật khẩu không chính xác')
+      }
+
+      if (typeof user.password !== 'string') {
+        throw new UnauthorizedException('Thông tin tài khoản hoặc mật khẩu không chính xác 123')
+      }
+
+      const isMatch = await bcrypt.compare(password, user.password as string)
+
+      if (!isMatch) {
+        throw new UnauthorizedException('Thông tin tài khoản hoặc mật khẩu không chính xác')
+      }
+
+      if (user.status === UserStatus.Inactive) {
+        throw new UnauthorizedException('Tài khoản đã bị khóa')
+      }
+
+      if (user.status === UserStatus.New) {
+        throw new UnauthorizedException(
+          'Tài khoản của bạn chưa được kích hoạt. Vui lòng check Hộp thư thoại ở email hoặc thực hiện đăng ký lại nếu quá 24h chưa email xác thực gửi về',
+        )
+      }
+
+      return user
+    } catch (error) {
+      this.logger.error(`Kiểm tra thông tin đăng nhập không thành công ${email}`, error.stack)
+      throw error
+    }
+  }
+
+  //IX. Check thông tin khi refreshToken
+  async checkInfoRefreshToken(id: string) {
+    try {
+      const [user] = await this.postgresService.execute<{ email: string }>(
+        'SELECT id, refresh_token, status FROM sys_user WHERE id = $1',
+        [id],
+      )
+
+      if (!user) {
+        throw new UnauthorizedException('Refresh token không hợp lệ')
+      }
+
+      return user
+    } catch (error) {
+      throw new UnauthorizedException(
+        'Có lỗi xảy ra trong quá trình sinh lại phiên đăng nhập. Vui lòng thực hiện sau ít phút',
+      )
     }
   }
 

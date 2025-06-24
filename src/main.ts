@@ -3,16 +3,20 @@ import { NestFactory, HttpAdapterHost } from '@nestjs/core'
 import { AppModule } from './app.module'
 import { Logger } from '@nestjs/common'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
-import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter'
 
 async function bootstrap() {
-
   const app = await NestFactory.create(AppModule)
-  
-  const { httpAdapter } = app.get(HttpAdapterHost);
-  app.useGlobalFilters(new AllExceptionsFilter(httpAdapter));
+  app.enableCors({
+    origin: '*', // hoặc ['http://localhost:8000'] nếu muốn giới hạn
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: '*',
+  })
 
-  app.setGlobalPrefix('api/auth');
+  const { httpAdapter } = app.get(HttpAdapterHost)
+  app.useGlobalFilters(new AllExceptionsFilter(httpAdapter))
+
+  app.setGlobalPrefix('api/auth')
 
   const config = new DocumentBuilder()
     .setTitle('API documentation')
@@ -28,13 +32,15 @@ async function bootstrap() {
         in: 'header',
       },
       'jwt',
-    ).build();
+    )
+    .build()
   const document = SwaggerModule.createDocument(app, config)
+  app.use('/api-json', (req, res) => res.json(document))
   SwaggerModule.setup('docs', app, document, {
     swaggerOptions: {
       persistAuthorization: true,
     },
-  });
+  })
 
   const port = process.env.PORT ?? 3000
   await app.listen(port)
