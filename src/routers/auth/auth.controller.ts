@@ -1,19 +1,20 @@
 import { Controller, Get, Req, UseGuards, Post, Body, UnauthorizedException, HttpCode } from '@nestjs/common'
 import { AuthGuard } from '@nestjs/passport'
 import { AuthService } from './auth.service'
-import { UsersService } from '../users/users.service'
+import { UserService } from '../user/user.service'
 import { responseObject } from '../../common/helpers/response.helper'
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger'
 import { LoginDto } from './dto/login.dto'
 import { RefreshTokenDto } from './dto/refresh-token.dto'
 import { TokenDto } from './dto/token'
+import { MessagePattern } from '@nestjs/microservices'
 
 @ApiTags('Auth')
 @Controller('')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
-    private readonly usersService: UsersService,
+    private readonly userService: UserService,
   ) {}
 
   @Get('sso/google')
@@ -58,7 +59,7 @@ export class AuthController {
   async login(@Body() loginDto: LoginDto) {
     const { email, password } = loginDto
 
-    const user = await this.usersService.checkInfoLogin(email, password) // kiểm tra email/pass
+    const user = await this.userService.checkInfoLogin(email, password) // kiểm tra email/pass
 
     const userNew = {
       id: user.id,
@@ -87,5 +88,10 @@ export class AuthController {
     const tokens = await this.authService.generateTokens(userNew) // tạo access/refresh token
 
     return responseObject(1, 'Cấp lại token thành công', 'Auth/RefreshToken', tokens)
+  }
+
+  @MessagePattern('validate-token')
+  async handleValidateToken(payload: { token: string }) {
+    return await this.authService.validateToken(payload.token)
   }
 }

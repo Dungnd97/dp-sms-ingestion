@@ -1,6 +1,5 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common'
 import { Pool, PoolClient, QueryConfig, QueryResult } from 'pg'
-
 @Injectable()
 export class PostgresService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PostgresService.name)
@@ -44,6 +43,8 @@ export class PostgresService implements OnModuleInit, OnModuleDestroy {
   private async withConnection<T>(operation: (client: PoolClient) => Promise<T>): Promise<T> {
     const client = await this.pool.connect()
     try {
+      const schema = process.env.MASTER_PG_SCHEMA || 'public'
+      await client.query(`SET search_path TO ${schema}`)
       return await operation(client)
     } finally {
       client.release()
@@ -63,15 +64,25 @@ export class PostgresService implements OnModuleInit, OnModuleDestroy {
     })
   }
 
-  async executeInTransaction(queries: { sql: string; params?: any[] }[]): Promise<void> {
+  async executeInTransaction(queries: { sql: string; params?: any[]; returnResult?: boolean }[]): Promise<any[]> {
     return this.withConnection(async (client) => {
+      const results: any[] = []
+
       try {
         await client.query('BEGIN')
-        for (const { sql, params = [] } of queries) {
-          await client.query(sql, params)
+
+        for (const { sql, params = [], returnResult } of queries) {
+          const res = await client.query(sql, params)
           this.logger.debug(`Executed in transaction: ${sql}`)
+
+          // Nếu cờ returnResult = true, thì push kết quả vào mảng kết quả
+          if (returnResult) {
+            results.push(res.rows)
+          }
         }
+
         await client.query('COMMIT')
+        return results
       } catch (error) {
         await client.query('ROLLBACK')
         this.logger.error('Transaction failed', error.stack)

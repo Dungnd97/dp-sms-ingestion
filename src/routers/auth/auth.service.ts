@@ -2,7 +2,7 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { GetTokenDTO } from './dto/get-token.dto'
-import { UsersService } from '../users/users.service'
+import { UserService } from '../user/user.service'
 import * as jwt from 'jsonwebtoken'
 
 interface JwtPayload {
@@ -18,7 +18,7 @@ export class AuthService {
 
   constructor(
     private readonly jwtService: JwtService,
-    private readonly usersService: UsersService,
+    private readonly userService: UserService,
   ) {}
 
   async generateTokens(user: { id: string; email: string }): Promise<GetTokenDTO> {
@@ -40,7 +40,7 @@ export class AuthService {
     )
 
     try {
-      await this.usersService.updateRefreshToken(user.id, refreshToken)
+      await this.userService.updateRefreshToken(user.id, refreshToken)
       return { accessToken, refreshToken }
     } catch (error) {
       this.logger.error(`Không cập nhật được refresh token cho user có id: ${user.id}`, error.stack)
@@ -64,7 +64,7 @@ export class AuthService {
         throw new UnauthorizedException('Token không hợp lệ')
       }
 
-      const user = await this.usersService.getUserById(payload.sub)
+      const user = await this.userService.getUserById(payload.sub)
 
       return user
     } catch (error) {
@@ -94,8 +94,7 @@ export class AuthService {
         throw new UnauthorizedException('Token không hợp lệ')
       }
       // Kiểm tra token có trùng với token trong DB không
-      const user = await this.usersService.checkInfoRefreshToken(payload.sub)
-      console.log(user)
+      const user = await this.userService.checkInfoRefreshToken(payload.sub)
 
       if (!user || user.refresh_token !== refreshToken) {
         throw new UnauthorizedException('Refresh token không hợp lệ')

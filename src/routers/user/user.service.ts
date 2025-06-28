@@ -4,20 +4,21 @@ import { MailService } from '../../mail/mail.service'
 import { hashPassword } from '../../utils/hashPassword'
 import { v4 as uuidv4 } from 'uuid'
 import { UserStatus } from '../../common/enums/user-status.enum'
+import { UserType } from '../../common/enums/user-type.enum'
 import * as jwt from 'jsonwebtoken'
 import { JwtService } from '@nestjs/jwt'
 import { parseExpireTime } from '../../utils/parseExpireTime'
 import * as bcrypt from 'bcrypt'
 
 @Injectable()
-export class UsersService {
-  private readonly logger = new Logger(UsersService.name)
+export class UserService {
+  private readonly logger = new Logger(UserService.name)
 
   constructor(
     private readonly postgresService: PostgresService,
     private readonly mailService: MailService,
     private readonly jwtService: JwtService,
-  ) { }
+  ) {}
 
   private returnMessage = (status: number, message: string, actionScreen?: string) => ({
     status,
@@ -49,9 +50,6 @@ export class UsersService {
             },
           ])
 
-          this.logger.log(
-            `Cập nhật trạng thái New -> Active thành công, trường hợp tồn tại user trạng thái New khi đăng nhập bằng SSO GG ${email}`,
-          )
           return { id, email, name }
         } catch (error) {
           this.logger.error(
@@ -78,14 +76,12 @@ export class UsersService {
     try {
       const [result] = await this.postgresService.execute<{ id: string; email: string; name: string }>(
         `
-        INSERT INTO sys_user (id, email, name, status, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, NOW(), NOW())
+        INSERT INTO sys_user (id, email, name, status, type, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
         RETURNING id, email, name
         `,
-        [newUserId, email, name, UserStatus.Active],
+        [newUserId, email, name, UserStatus.Active, UserType.User],
       )
-      console.log(result)
-      this.logger.log(`Thêm mới user thành công với email: ${email}`)
       return result
     } catch (error) {
       this.logger.error(`Thêm mới user không thành công với email: ${email}`, error.stack)
@@ -105,8 +101,6 @@ export class UsersService {
 
     try {
       await this.postgresService.executeInTransaction([{ sql, params }])
-
-      this.logger.log(`Cập nhật refreshToken thành công cho user có id: ${id}`)
       return true
     } catch (error) {
       this.logger.error(`Cập nhật refreshToken KHÔNG thành công cho user có id: ${id}`, error.stack)
@@ -126,8 +120,6 @@ export class UsersService {
         this.logger.warn(`Người dùng với email: ${email} không tồn tại`)
         return null
       }
-
-      this.logger.log(`Lấy thông tin người dùng theo email ${email} success`)
       return result[0] // Trả về user đầu tiên tìm thấy
     } catch (error) {
       this.logger.error(`FKhông thể lấy được người dùng theo by email ${email}`, error.stack)
@@ -147,8 +139,6 @@ export class UsersService {
         this.logger.log(`Người dùng với id: ${id} không tồn tại`)
         return null
       }
-
-      this.logger.log(`Lấy thông tin người dùng với id: ${id} thành công`)
       return result[0]
     } catch (error) {
       this.logger.error(`Không thể lấy được người dùng theo id: ${id}`, error.stack)
@@ -230,11 +220,11 @@ export class UsersService {
         // 3.1. Tạo user
         {
           sql: `
-            INSERT INTO sys_user (id, email, password, status, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, NOW(), NOW())
+            INSERT INTO sys_user (id, email, password, status, type, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
             RETURNING id
           `,
-          params: [newUserId, email, hashedPassword, UserStatus.New],
+          params: [newUserId, email, hashedPassword, UserStatus.New, UserType.User],
         },
       ])
       return this.returnMessage(
@@ -268,7 +258,6 @@ export class UsersService {
 
       // 2. Kiểm tra tài khoản và trạng thái xác thực email
       const user = await this.getUserById(payload.sub)
-      console.log(user)
       if (!user || user.length === 0) {
         return this.returnMessage(0, 'Tài khoản không tồn tại trong hệ thống. Vui lòng đăng ký lại.', 'USER_LOGIN')
       }
@@ -293,7 +282,11 @@ export class UsersService {
         ])
 
         this.logger.log('Cập nhật trạng thái New -> Active thành công, trường hợp xác thực email')
-        return this.returnMessage(1, 'Tài khoản của bạn đã được kích hoạt thành công. Vui lòng thực hiện đăng nhập dựa trên các thông tin mà bạn đã đăng ký.', 'USER_LOGIN')
+        return this.returnMessage(
+          1,
+          'Tài khoản của bạn đã được kích hoạt thành công. Vui lòng thực hiện đăng nhập dựa trên các thông tin mà bạn đã đăng ký.',
+          'USER_LOGIN',
+        )
       } catch (error) {
         this.logger.error('Cập nhật trạng thái New -> Active không thành công, trường hợp xác thực email', error.stack)
         throw error
@@ -368,7 +361,7 @@ export class UsersService {
 
   //X.Gửi Email để đổi mật khẩu
   async sendResetPasswordEmail(email: string): Promise<{ status: number; message: string; actionScreen?: string }> {
-    const user = await this.getUserByEmail(email);
+    const user = await this.getUserByEmail(email)
 
     const defaultMessage =
       'Nếu email tồn tại, một liên kết đặt lại mật khẩu đã được gửi. Vui lòng kiểm tra Hộp thư thoại hoặc Thư rác trong địa chỉ email bạn vừa nhập.'
@@ -378,7 +371,7 @@ export class UsersService {
     }
 
     const updatedAt = new Date(user.updated_at as string).getTime()
-    const now = Date.now();
+    const now = Date.now()
     const expireMs = parseExpireTime(process.env.JWT_EXPIRES_IN_RESET_PASSWORD || '15m')
 
     if (now < updatedAt + expireMs) {
@@ -396,7 +389,7 @@ export class UsersService {
       expiresIn: process.env.JWT_EXPIRES_IN_RESET_PASSWORD || '15m',
     })
 
-    const resetUrl = `${process.env.APP_URL_FORGOT_PASSWORD}?token=${tokenEmail}`;
+    const resetUrl = `${process.env.APP_URL_FORGOT_PASSWORD}?token=${tokenEmail}`
 
     const htmlContent = `
       <p>Xin chào ${user.name || ''},</p>
@@ -404,13 +397,13 @@ export class UsersService {
       <a href="${resetUrl}">Đặt lại mật khẩu</a>
       <p>Liên kết sẽ hết hạn sau 15 phút.</p>
       <p>Nếu bạn không yêu cầu, hãy bỏ qua email này.</p>
-    `;
+    `
 
     await this.mailService.sendMail({
       to: email,
       subject: 'Yêu cầu đặt lại mật khẩu',
       html: htmlContent,
-    });
+    })
 
     await this.postgresService.executeInTransaction([
       {
@@ -426,7 +419,9 @@ export class UsersService {
   }
 
   //XI.Kiểm tra Token đổi mật khẩu
-  async validateResetPasswordEmailToken(token: string): Promise<{ status: number; message: string; actionScreen?: string }> {
+  async validateResetPasswordEmailToken(
+    token: string,
+  ): Promise<{ status: number; message: string; actionScreen?: string }> {
     try {
       const secret = process.env.JWT_SECRET_RESET_PASSWORD
       if (!secret) {
@@ -446,7 +441,11 @@ export class UsersService {
       }
 
       if (user.status !== UserStatus.Active) {
-        return this.returnMessage(0, 'Tài khoản chưa được kích hoạt. Vui lòng kiểm tra Hộp thư thoại hoặc Thư rác trong địa chỉ email. Nếu quá 24h kể từ lúc đăng ký bạn không nhận được email xác thực, vui lòng thực hiện lại đăng ký.', 'USER_LOGIN')
+        return this.returnMessage(
+          0,
+          'Tài khoản chưa được kích hoạt. Vui lòng kiểm tra Hộp thư thoại hoặc Thư rác trong địa chỉ email. Nếu quá 24h kể từ lúc đăng ký bạn không nhận được email xác thực, vui lòng thực hiện lại đăng ký.',
+          'USER_LOGIN',
+        )
       }
 
       return this.returnMessage(1, 'Xác thực hợp lệ. Bạn có thể đổi mật khẩu.')
@@ -461,56 +460,56 @@ export class UsersService {
 
   //XII. Cấp lại mật khẩu
   async resetPassword(
-  token: string,
-  newPassword: string,
-  confirmPassword: string,
-): Promise<{ status: number; message: string; actionScreen?: string }> {
-  if (newPassword !== confirmPassword) {
-    return this.returnMessage(0, 'Mật khẩu và xác nhận mật khẩu không khớp');
-  }
-
-  try {
-    if (!process.env.JWT_SECRET_RESET_PASSWORD) {
-      return this.returnMessage(0, 'Thiếu cấu hình bảo mật reset password');
+    token: string,
+    newPassword: string,
+    confirmPassword: string,
+  ): Promise<{ status: number; message: string; actionScreen?: string }> {
+    if (newPassword !== confirmPassword) {
+      return this.returnMessage(0, 'Mật khẩu và xác nhận mật khẩu không khớp')
     }
-
-    let payload: { sub: string; email: string };
 
     try {
-      payload = this.jwtService.verify(token, {
-        secret: process.env.JWT_SECRET_RESET_PASSWORD,
-      });
-    } catch (err) {
-      if (err.name === 'TokenExpiredError') {
-        return this.returnMessage(0, 'Liên kết đặt lại mật khẩu đã hết hạn. Vui lòng gửi lại yêu cầu.');
-      } else if (err.name === 'JsonWebTokenError') {
-        return this.returnMessage(0, 'Token không hợp lệ. Vui lòng kiểm tra lại liên kết.');
+      if (!process.env.JWT_SECRET_RESET_PASSWORD) {
+        return this.returnMessage(0, 'Thiếu cấu hình bảo mật reset password')
       }
-      return this.returnMessage(0, 'Lỗi xác thực token.');
+
+      let payload: { sub: string; email: string }
+
+      try {
+        payload = this.jwtService.verify(token, {
+          secret: process.env.JWT_SECRET_RESET_PASSWORD,
+        })
+      } catch (err) {
+        if (err.name === 'TokenExpiredError') {
+          return this.returnMessage(0, 'Liên kết đặt lại mật khẩu đã hết hạn. Vui lòng gửi lại yêu cầu.')
+        } else if (err.name === 'JsonWebTokenError') {
+          return this.returnMessage(0, 'Token không hợp lệ. Vui lòng kiểm tra lại liên kết.')
+        }
+        return this.returnMessage(0, 'Lỗi xác thực token.')
+      }
+
+      if (!payload?.sub) {
+        return this.returnMessage(0, 'Token không hợp lệ.')
+      }
+
+      const user = await this.getUserById(payload.sub)
+      if (!user) {
+        return this.returnMessage(0, 'Tài khoản không tồn tại')
+      }
+
+      const hashedPassword = await hashPassword(newPassword)
+      await this.updatePasswordById(user.id, hashedPassword)
+
+      return this.returnMessage(
+        1,
+        'Mật khẩu đã được thay đổi thành công. Vui lòng đăng nhập lại với mật khẩu mới.',
+        'USER_LOGIN',
+      )
+    } catch (error) {
+      this.logger.error(error.stack)
+      return this.returnMessage(0, 'Có lỗi xảy ra khi đặt lại mật khẩu')
     }
-
-    if (!payload?.sub) {
-      return this.returnMessage(0, 'Token không hợp lệ.');
-    }
-
-    const user = await this.getUserById(payload.sub);
-    if (!user) {
-      return this.returnMessage(0, 'Tài khoản không tồn tại');
-    }
-
-    const hashedPassword = await hashPassword(newPassword);
-    await this.updatePasswordById(user.id, hashedPassword);
-
-    return this.returnMessage(
-      1,
-      'Mật khẩu đã được thay đổi thành công. Vui lòng đăng nhập lại với mật khẩu mới.',
-      'USER_LOGIN',
-    );
-  } catch (error) {
-    this.logger.error(error.stack);
-    return this.returnMessage(0, 'Có lỗi xảy ra khi đặt lại mật khẩu');
   }
-}
 
   // B. Các service dùng nội bộ
   // I. Hàm sinh token
@@ -563,10 +562,10 @@ export class UsersService {
         `,
           params: [hashedPassword, userId],
         },
-      ]);
+      ])
     } catch (error) {
-      this.logger.error(`Lỗi khi cập nhật mật khẩu cho user ${userId}`, error.stack);
-      throw new InternalServerErrorException('Không thể cập nhật mật khẩu');
+      this.logger.error(`Lỗi khi cập nhật mật khẩu cho user ${userId}`, error.stack)
+      throw new InternalServerErrorException('Không thể cập nhật mật khẩu')
     }
   }
 }
