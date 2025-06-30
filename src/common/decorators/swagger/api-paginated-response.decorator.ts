@@ -1,11 +1,11 @@
-import { applyDecorators, Type } from '@nestjs/common';
-import { ApiExtraModels, getSchemaPath, ApiOkResponse } from '@nestjs/swagger';
-import { ResponseDto, PaginationMetaDto } from '../../dto/response.dto';
+import { applyDecorators, Type } from '@nestjs/common'
+import { ApiExtraModels, getSchemaPath, ApiOkResponse } from '@nestjs/swagger'
+import { ResponseDto, PaginationMetaDto } from '../../dto/response.dto'
 
 interface ApiResponseOptions {
-  model: Type<any>;
-  isArray?: boolean;
-  paginated?: boolean;
+  model: Type<any>
+  isArray?: boolean
+  paginated?: boolean
 }
 
 export const ApiResponseDto = ({ model, isArray = false, paginated = false }: ApiResponseOptions) => {
@@ -14,7 +14,7 @@ export const ApiResponseDto = ({ model, isArray = false, paginated = false }: Ap
         type: 'array',
         items: { $ref: getSchemaPath(model) },
       }
-    : { $ref: getSchemaPath(model) };
+    : { $ref: getSchemaPath(model) }
 
   const responseSchema: any = {
     allOf: [
@@ -25,14 +25,14 @@ export const ApiResponseDto = ({ model, isArray = false, paginated = false }: Ap
         },
       },
     ],
-  };
+  }
 
   if (paginated) {
-    responseSchema.allOf[1].properties.meta = { $ref: getSchemaPath(PaginationMetaDto) };
+    responseSchema.allOf[1].properties.meta = { $ref: getSchemaPath(PaginationMetaDto) }
   }
 
   return applyDecorators(
     ApiExtraModels(ResponseDto, model, PaginationMetaDto),
     ApiOkResponse({ schema: responseSchema }),
-  );
-};
+  )
+}

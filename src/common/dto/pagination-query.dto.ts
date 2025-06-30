@@ -1,6 +1,6 @@
-import { IsOptional, IsInt, Min, IsString, Matches, IsObject } from 'class-validator';
-import { Type } from 'class-transformer';
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsInt, Min, IsString, Matches, IsObject } from 'class-validator'
+import { Type } from 'class-transformer'
+import { ApiPropertyOptional } from '@nestjs/swagger'
 
 export class PaginationQueryDto {
   @ApiPropertyOptional({ example: 1 })
@@ -8,14 +8,14 @@ export class PaginationQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  page: number = 1;
+  page: number = 1
 
   @ApiPropertyOptional({ example: 10 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  limit: number = 10;
+  limit: number = 10
 
   @ApiPropertyOptional({
     example: 'connectionString:asc',
@@ -26,16 +26,16 @@ export class PaginationQueryDto {
   @Matches(/^(\w+:(asc|desc))(,\w+:(asc|desc))*$/, {
     message: 'Sort must be in the format field:asc,field2:desc',
   })
-  sort?: string;
+  sort?: string
 
   @ApiPropertyOptional({
     example: {
       dbKey: 'mydb',
-      username: 'admin'
+      username: 'admin',
     },
     description: 'Tìm kiếm động theo các trường trong DTO',
   })
   @IsOptional()
   @IsObject()
-  filters?: Record<string, string | number>;
+  filters?: Record<string, string | number>
 }

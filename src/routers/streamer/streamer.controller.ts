@@ -4,6 +4,8 @@ import { UpdateToStreamerDTO } from './dto/update-to-streamer'
 import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
 import { MessagePattern } from '@nestjs/microservices'
+import { plainToInstance } from 'class-transformer'
+import { StreamerInfoShareDto } from './dto/streamer-info-share-dto'
 
 @Controller('streamer')
 export class StreamerController {
@@ -27,7 +29,11 @@ export class StreamerController {
   }
 
   @MessagePattern('get-info-streamer')
-  async handleValidateToken(payload: { amount: number; slugLink?: string; id?: string }) {
-    return this.streamerService.getInfoStreamer(payload.amount, payload.slugLink, payload.id)
+  async handleGetInfoStreamer(payload: { amount: number; slugLink?: string; id?: string }) {
+    const streamerInfo = await this.streamerService.getInfoStreamer(payload.amount, payload.slugLink, payload.id)
+
+    return plainToInstance(StreamerInfoShareDto, streamerInfo, {
+      excludeExtraneousValues: true,
+    })
   }
 }

@@ -1,5 +1,5 @@
-import { IsNotEmpty, IsString, Matches, MinLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, Matches, MinLength } from 'class-validator'
+import { ApiProperty } from '@nestjs/swagger'
 
 export class ResetPasswordDto {
   @ApiProperty({
@@ -8,7 +8,7 @@ export class ResetPasswordDto {
   })
   @IsNotEmpty()
   @IsString()
-  token: string;
+  token: string
 
   @ApiProperty({
     description: 'Mật khẩu mới',
@@ -21,7 +21,7 @@ export class ResetPasswordDto {
   @Matches(/(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).*/, {
     message: 'Mật khẩu phải chứa ít nhất 1 chữ hoa, 1 chữ thường và 1 số',
   })
-  newPassword: string;
+  newPassword: string
 
   @ApiProperty({
     description: 'Nhập lại mật khẩu mới để xác nhận',
@@ -29,5 +29,5 @@ export class ResetPasswordDto {
   })
   @IsNotEmpty()
   @IsString()
-  confirmPassword: string;
+  confirmPassword: string
 }
