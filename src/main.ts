@@ -28,7 +28,7 @@ async function bootstrap() {
   const httpAdapterHost = app.get(HttpAdapterHost)
   app.useGlobalFilters(new AllExceptionsFilter(httpAdapterHost))
 
-  app.setGlobalPrefix('api/auth')
+  app.setGlobalPrefix('api/sms-ingestion')
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -55,6 +55,15 @@ async function bootstrap() {
         in: 'header',
       },
       'jwt',
+    )
+    .addApiKey(
+      {
+        type: 'apiKey',
+        name: 'key', // tên header bạn sử dụng
+        in: 'header',
+        description: 'Enter your API key here',
+      },
+      'api-key', // security name dùng cho @ApiSecurity()
     )
     .build()
   const document = SwaggerModule.createDocument(app, config)
