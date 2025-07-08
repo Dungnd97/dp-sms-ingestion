@@ -55,7 +55,7 @@ export class PostgresService implements OnModuleInit, OnModuleDestroy {
     return this.withConnection(async (client) => {
       try {
         const result = await client.query<T>(sql, params)
-        this.logger.debug(`Executed SQL: ${sql}`)
+        // this.logger.debug(`Executed SQL: ${sql}`)
         return result.rows
       } catch (error) {
         this.logger.error(`SQL Error: ${sql}`, error.stack)
@@ -64,21 +64,27 @@ export class PostgresService implements OnModuleInit, OnModuleDestroy {
     })
   }
 
-  async executeInTransaction(queries: { sql: string; params?: any[]; returnResult?: boolean }[]): Promise<any[]> {
+  async executeInTransaction<T>(
+    queries: { sql: string; params?: any[]; returnResult?: boolean }[],
+    callback?: (client: PoolClient) => Promise<T>,
+  ): Promise<T | any[]> {
     return this.withConnection(async (client) => {
       const results: any[] = []
-
       try {
         await client.query('BEGIN')
 
         for (const { sql, params = [], returnResult } of queries) {
           const res = await client.query(sql, params)
-          this.logger.debug(`Executed in transaction: ${sql}`)
-
-          // Nếu cờ returnResult = true, thì push kết quả vào mảng kết quả
+          // this.logger.debug(`Executed in transaction: ${sql}`)
           if (returnResult) {
             results.push(res.rows)
           }
+        }
+
+        if (callback) {
+          const cbResult = await callback(client)
+          await client.query('COMMIT')
+          return cbResult
         }
 
         await client.query('COMMIT')
