@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { IsNotEmpty, IsString } from 'class-validator'
+import { Transform } from 'class-transformer'
+import { IsDate, IsNotEmpty, IsString } from 'class-validator'
 
 export class CreateSmsTrans {
   @ApiProperty({
@@ -22,7 +23,20 @@ export class CreateSmsTrans {
     description: 'Thời gian nhận tin nhắn',
     example: '08/07/2025 12:12:00',
   })
+  @Transform(({ value }) => {
+    if (typeof value !== 'string') return null
+
+    const [datePart, timePart] = value.trim().split(' ')
+    if (!datePart || !timePart) return null
+
+    const [day, month, year] = datePart.split('/')
+    if (!day || !month || !year) return null
+
+    const isoString = `${year}-${month}-${day}T${timePart}`
+    const date = new Date(isoString)
+    return isNaN(date.getTime()) ? null : date
+  })
+  @IsDate({ message: 'Thời gian không hợp lệ, định dạng đúng: dd/MM/yyyy HH:mm:ss' })
   @IsNotEmpty()
-  @IsString()
   sendAt: string
 }

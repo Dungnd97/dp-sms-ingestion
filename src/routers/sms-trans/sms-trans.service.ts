@@ -1,5 +1,6 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common'
-import { PostgresService } from 'src/database/postgres.service'
+import { Injectable, InternalServerErrorException, Logger, UnauthorizedException } from '@nestjs/common'
+import { PostgresService } from '../../database/postgres.service'
+import { extractSmsInfo } from '../../utils/extractSmsInfo'
 import { v4 as uuidv4 } from 'uuid'
 
 @Injectable()
@@ -21,55 +22,69 @@ export class SmsTransService {
     sendAt: string,
   ): Promise<{ status: number; message: string; actionScreen?: string }> {
     // 1. Kiểm tra API key có hợp lệ không
-    await this.historyTrans(content, sender, sendAt)
-
     const resultConfig = await this.checkApiKeyValid(apiKey)
     if (!resultConfig) {
       throw new UnauthorizedException('API key not valid')
     }
-    console.log(resultConfig)
-    return this.returnMessage(1, 'Thời gian xác thực đã hết hạn. Vui lòng thực hiện đăng ký lại')
+    const resultTransHis = await this.historyTrans(content, sender, sendAt)
+    await this.insertTrans(content, sender, sendAt, resultConfig.orgCode, resultTransHis.id)
+    return this.returnMessage(1, 'Thành công')
   }
 
-  private async checkApiKeyValid(apiKey: string): Promise<{ data: any }> {
+  async checkApiKeyValid(apiKey: string): Promise<{ orgCode: string }> {
     try {
-      const [result] = await this.postgresService.execute<{ id: string; orgCode: string }>(
-        'SELECT id, orgCode FROM dp_config WHERE id = $1 LIMIT 1',
+      const [result] = await this.postgresService.execute<{ id: string; org_code: string }>(
+        'SELECT id, org_code FROM dp_config WHERE id = $1 LIMIT 1',
         [apiKey],
       )
-      console.log(result)
-      return result // Trả về user đầu tiên tìm thấy
+      return result.org_code
     } catch (error) {
-      this.logger.error(`FKhông thể lấy được cấu hình theo API key  ${apiKey}`, error.stack)
+      this.logger.error(`Không thể lấy được cấu hình theo API key  ${apiKey}`, error.stack)
       throw new UnauthorizedException('Có lỗi xảy ra trong quá trình thực hiện. Vui lòng thử lại sau')
     }
   }
 
-  private async insertUser(email: string, name: string): Promise<{ id: string; email: string; name: string }> {
-    const id = uuidv4()
+  async insertTrans(
+    content: string,
+    sender: string,
+    sendAt: any,
+    orgCode: string,
+    id: string,
+  ): Promise<{ id: string }> {
+    const smsInfo = extractSmsInfo(content, sender)
+    if (!smsInfo) {
+      throw new InternalServerErrorException('API key not valid')
+    }
+    console.log(smsInfo)
+
     await this.postgresService.execute(
       `
-      INSERT INTO sys_user (id, email, name, status, type, created_at, updated_at)
-      VALUES ($1, $2, $3, 'active', 'user', NOW(), NOW())
+      INSERT INTO dp_sms_ingestion_trans (id, created_at, updated_at, amount, content_key, sender, send_at)
+      VALUES ($1, NOW(), NOW(), $2, $3, $4, $5)
       `,
-      [id, email, name],
+      [id, smsInfo.amount, smsInfo.transactionId, sender, sendAt],
     )
-    return { id, email, name }
+    return { id }
   }
 
-  private async historyTrans(content: string, sender: string, senderAt: string): Promise<boolean> {
+  async historyTrans(content: string, sender: string, senderAt: string): Promise<{ id: string }> {
     try {
-      await this.postgresService.execute(
+      const [result] = await this.postgresService.execute<{ id: string }>(
         `
-      INSERT INTO dp_sms_ingestion_trans_his (id, created_at, updated_at, content, sender, send_at)
-      VALUES ($1, NOW(), NOW(), $2, $3, $4)
-      `,
+        INSERT INTO dp_sms_ingestion_trans_his (
+            id, created_at, updated_at, content, sender, send_at
+        )
+        VALUES ($1, NOW(), NOW(), $2, $3, $4)
+        RETURNING id
+        `,
         [uuidv4(), content, sender, senderAt],
       )
-      return true
+      return {
+        id: result.id,
+      }
     } catch (error) {
       this.logger.error(`Không thể ghi nhận lịch sử`, error.stack)
-      throw new UnauthorizedException('Có lỗi xảy ra trong quá trình thực hiện. Vui lòng thử lại sau')
+      throw new InternalServerErrorException('Có lỗi xảy ra trong quá trình thực hiện. Vui lòng thử lại sau')
     }
   }
 }

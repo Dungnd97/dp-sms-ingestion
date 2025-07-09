@@ -17,7 +17,7 @@ export class SmsTransController {
 
     return {
       status: 1,
-      message: 'Tạo user thành công',
+      message: 'Thành công',
       data: result,
     }
   }
