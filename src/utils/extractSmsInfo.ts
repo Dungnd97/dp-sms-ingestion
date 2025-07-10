@@ -7,7 +7,7 @@ export function extractSmsInfo(message: string, sender: string) {
     const amount = rawAmount ? Number(rawAmount.replace(/[.,]/g, '')) : null
 
     // 2. Lấy UUID sau "ID-" theo định dạng chuẩn
-    const idMatch = message.match(/ID-([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i)
+    const idMatch = message.match(/ID([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i)
     const transactionId = idMatch?.[1] ?? null
 
     return { amount, transactionId }
