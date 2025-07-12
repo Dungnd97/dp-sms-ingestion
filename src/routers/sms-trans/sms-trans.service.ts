@@ -27,7 +27,8 @@ export class SmsTransService {
       throw new UnauthorizedException('API key not valid')
     }
     const resultTransHis = await this.historyTrans(content, sender, sendAt)
-    await this.insertTrans(content, sender, sendAt, resultConfig.orgCode, resultTransHis.id)
+
+    await this.insertTrans(content, sender, sendAt, resultTransHis.id)
     return this.returnMessage(1, 'Thành công')
   }
 
@@ -44,26 +45,21 @@ export class SmsTransService {
     }
   }
 
-  async insertTrans(
-    content: string,
-    sender: string,
-    sendAt: any,
-    orgCode: string,
-    id: string,
-  ): Promise<{ id: string }> {
+  async insertTrans(content: string, sender: string, sendAt: any, id: string): Promise<{ id: string }> {
     const smsInfo = extractSmsInfo(content, sender)
     if (!smsInfo) {
       throw new InternalServerErrorException('API key not valid')
     }
-    console.log(smsInfo)
-
-    await this.postgresService.execute(
-      `
-      INSERT INTO dp_sms_ingestion_trans (id, created_at, updated_at, amount, content_key, sender, send_at)
-      VALUES ($1, NOW(), NOW(), $2, $3, $4, $5)
+    console.log(smsInfo.amount)
+    if (smsInfo.amount && smsInfo.transactionId) {
+      await this.postgresService.execute(
+        `
+      INSERT INTO dp_sms_ingestion_trans (id, created_at, updated_at, amount, content_key, sender, send_at, status, run_number)
+      VALUES ($1, NOW(), NOW(), $2, $3, $4, $5, $6, $7)
       `,
-      [id, smsInfo.amount, smsInfo.transactionId, sender, sendAt],
-    )
+        [id, smsInfo.amount, smsInfo.transactionId, sender, sendAt, 'NEW', 1],
+      )
+    }
     return { id }
   }
 

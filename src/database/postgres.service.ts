@@ -75,7 +75,7 @@ export class PostgresService implements OnModuleInit, OnModuleDestroy {
 
         for (const { sql, params = [], returnResult } of queries) {
           const res = await client.query(sql, params)
-          // this.logger.debug(`Executed in transaction: ${sql}`)
+          this.logger.debug(`Executed in transaction: ${sql}`)
           if (returnResult) {
             results.push(res.rows)
           }

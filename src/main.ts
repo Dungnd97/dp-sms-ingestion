@@ -13,12 +13,13 @@ async function bootstrap() {
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.TCP,
     options: {
-      host: process.env.TCP_HOST || '127.0.0.1',
+      host: process.env.TCP_HOST || '0.0.0.0',
       port: parseInt(process.env.TCP_PORT || '8004'),
     },
   })
 
   await app.startAllMicroservices()
+
   app.enableCors({
     origin: '*', // hoặc ['http://localhost:8000'] nếu muốn giới hạn
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
